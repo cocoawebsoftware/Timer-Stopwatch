@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>モダンタイマー / ストップウォッチ</title>
+<style>
+@font-face { font-family: 'Gill Sans Light'; src: url('font/GillSans-Light.otf') format('opentype'); }
+
+body {
+  font-family: 'Gill Sans Light', sans-serif;
+  margin: 0; padding: 0;
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-start;
+  min-height: 100vh;
+  transition: background-color 0.3s, color 0.3s;
+}
+body.light { background-color: #f0f0f0; color: #222; }
+body.dark { background-color: #1a1a1a; color: #f5f5f5; }
+
+.container { margin-top: 50px; display: flex; flex-direction: column; align-items: center; gap: 20px; }
+
+#display {
+  display: flex; justify-content: center; align-items: center;
+  gap: 10px;
+  font-size: 64px;
+  padding: 25px 40px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 20px;
+  box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+}
+
+.timeUnit {
+  display: flex; flex-direction: column; align-items: center; gap: 5px;
+}
+
+.arrowBtn {
+  width: 60px; height: 60px;
+  border: none; background: none; cursor: pointer;
+  transition: transform 0.1s;
+}
+.arrowBtn img { width: 100%; height: 100%; }
+.arrowBtn:hover { transform: scale(1.1); }
+.arrowBtn:active { transform: scale(0.95); }
+
+button.main {
+  padding: 12px 25px;
+  border-radius: 15px;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  background: #4a90e2;
+  color: white;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 5px 10px rgba(0,0,0,0.15);
+}
+button.main:hover { background: #357ABD; transform: translateY(-2px); }
+button.main:active { transform: translateY(1px); }
+
+.lapList {
+  max-height: 180px;
+  overflow-y: auto;
+  width: 220px;
+  text-align: left;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 5px 10px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+.lapList div { border-bottom: 1px solid rgba(0,0,0,0.1); padding: 4px 0; }
+
+.controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+
+#deciDisplay { font-size: 32px; }
+</style>
+</head>
+<body class="light">
+<div class="container">
+<h1 id="modeTitle">ストップウォッチ</h1>
+
+<div id="display">
+  <div class="timeUnit" id="minTenUnit">
+    <button class="arrowBtn up"><img src="Asset/UpWhite.svg"></button>
+    <span id="minTen">0</span>
+    <button class="arrowBtn down"><img src="Asset/DownWhite.svg"></button>
+  </div>
+  <div class="timeUnit" id="minOneUnit">
+    <button class="arrowBtn up"><img src="Asset/UpWhite.svg"></button>
+    <span id="minOne">0</span>
+    <button class="arrowBtn down"><img src="Asset/DownWhite.svg"></button>
+  </div>
+  <span>:</span>
+  <div class="timeUnit" id="secTenUnit">
+    <button class="arrowBtn up"><img src="Asset/UpWhite.svg"></button>
+    <span id="secTen">0</span>
+    <button class="arrowBtn down"><img src="Asset/DownWhite.svg"></button>
+  </div>
+  <div class="timeUnit" id="secOneUnit">
+    <button class="arrowBtn up"><img src="Asset/UpWhite.svg"></button>
+    <span id="secOne">0</span>
+    <button class="arrowBtn down"><img src="Asset/DownWhite.svg"></button>
+  </div>
+  <span id="deciDisplay">.0</span>
+</div>
+
+<div class="controls">
+  <button id="switchMode" class="main">タイマーに切り替え</button>
+  <button id="toggleDark" class="main">ダークモード切替</button>
+</div>
+
+<div id="stopwatchControls" class="modeControls">
+  <button id="startStopSW" class="main">スタート</button>
+  <button id="resetSW" class="main">リセット</button>
+  <button id="lapSW" class="main">ラップ</button>
+  <div class="lapList" id="lapList"></div>
+</div>
+
+<div id="timerControls" class="modeControls">
+  <button id="startStopTimer" class="main">スタート</button>
+  <audio id="alarmSound" src="alarm.mp3" preload="auto"></audio>
+</div>
+
+<script>
+let mode="stopwatch";
+const switchBtn=document.getElementById("switchMode");
+const modeTitle=document.getElementById("modeTitle");
+const stopwatchControls=document.getElementById("stopwatchControls");
+const timerControls=document.getElementById("timerControls");
+const toggleDark=document.getElementById("toggleDark");
+
+toggleDark.onclick=()=>{
+  document.body.classList.toggle("dark");
+  document.body.classList.toggle("light");
+  updateArrowImages();
+};
+
+// ストップウォッチ
+let swRunning=false, swInterval, swElapsed=0;
+const startStopSW=document.getElementById('startStopSW');
+const resetSW=document.getElementById('resetSW');
+const lapSW=document.getElementById('lapSW');
+const lapList=document.getElementById('lapList');
+const minTenSpan=document.getElementById("minTen");
+const minOneSpan=document.getElementById("minOne");
+const secTenSpan=document.getElementById("secTen");
+const secOneSpan=document.getElementById("secOne");
+const deciDisplay=document.getElementById("deciDisplay");
+
+function updateSWDisplay(){
+  let mins=Math.floor((swElapsed%3600)/60);
+  let secs=Math.floor(swElapsed%60);
+  let deci=Math.floor((swElapsed%1)*10);
+  minTenSpan.textContent=Math.floor(mins/10);
+  minOneSpan.textContent=mins%10;
+  secTenSpan.textContent=Math.floor(secs/10);
+  secOneSpan.textContent=secs%10;
+  deciDisplay.textContent='.'+deci;
+}
+
+startStopSW.onclick=()=>{
+  if(swRunning){ clearInterval(swInterval); swRunning=false; startStopSW.textContent="スタート"; }
+  else{ swRunning=true; startStopSW.textContent="ストップ"; swInterval=setInterval(()=>{ swElapsed+=0.1; updateSWDisplay(); },100);}
+};
+resetSW.onclick=()=>{ clearInterval(swInterval); swRunning=false; swElapsed=0; updateSWDisplay(); startStopSW.textContent="スタート"; lapList.innerHTML="";};
+lapSW.onclick=()=>{ if(swRunning){ const div=document.createElement('div'); div.textContent=`${minTenSpan.textContent}${minOneSpan.textContent}:${secTenSpan.textContent}${secOneSpan.textContent}.${deciDisplay.textContent}`; lapList.prepend(div);} };
+
+// タイマー
+let timerRunning=false, timerInterval;
+let timerMinutes=0, timerSeconds=0;
+const startStopTimerBtn=document.getElementById('startStopTimer');
+const alarmSound=document.getElementById('alarmSound');
+
+function updateTimerDisplay(){
+  while(timerSeconds>=60){ timerMinutes++; timerSeconds-=60; }
+  minTenSpan.textContent=Math.floor(timerMinutes/10);
+  minOneSpan.textContent=timerMinutes%10;
+  secTenSpan.textContent=Math.floor(timerSeconds/10);
+  secOneSpan.textContent=timerSeconds%10;
+  deciDisplay.textContent='.0';
+}
+
+// 長押し加速
+function addHold(btn,fn){
+  let interval, speed=400;
+  const repeat=()=>{
+    fn(); updateTimerDisplay();
+    speed=Math.max(50,speed*0.85);
+    clearInterval(interval);
+    interval=setInterval(repeat,speed);
+  };
+  btn.addEventListener('mousedown',()=>{
+    if(timerRunning || mode==="stopwatch") return;
+    speed=400;
+    repeat();
+  });
+  btn.addEventListener('mouseup',()=>clearInterval(interval));
+  btn.addEventListener('mouseleave',()=>clearInterval(interval));
+}
+
+// 矢印ボタン設定
+function updateArrowImages(){
+  const dark=document.body.classList.contains("dark");
+  document.querySelectorAll('.arrowBtn.up img').forEach(img=>img.src=dark?"Asset/UpDark.svg":"Asset/UpWhite.svg");
+  document.querySelectorAll('.arrowBtn.down img').forEach(img=>img.src=dark?"Asset/DownDark.svg":"Asset/DownWhite.svg");
+}
+updateArrowImages();
+
+const upDownPairs=[
+  ["#minTenUnit",10], ["#minOneUnit",1], ["#secTenUnit",10], ["#secOneUnit",1]
+];
+upDownPairs.forEach(([id,val])=>{
+  const up=document.querySelector(`${id} .up`);
+  const down=document.querySelector(`${id} .down`);
+  addHold(up,()=>{ if(id.includes('min')) timerMinutes+=val; else timerSeconds+=val; });
+  addHold(down,()=>{ if(id.includes('min')) timerMinutes=Math.max(0,timerMinutes-val); else timerSeconds=Math.max(0,timerSeconds-val); });
+});
+
+// スタート/ストップ
+startStopTimerBtn.onclick=()=>{
+  if(timerRunning){ clearInterval(timerInterval); timerRunning=false; startStopTimerBtn.textContent="スタート"; }
+  else{
+    let totalSeconds=timerMinutes*60+timerSeconds;
+    if(totalSeconds<=0) return;
+    timerRunning=true; startStopTimerBtn.textContent="ストップ";
+    timerInterval=setInterval(()=>{
+      if(totalSeconds<=0){ clearInterval(timerInterval); timerRunning=false; startStopTimerBtn.textContent="スタート"; alarmSound.play(); }
+      else{ totalSeconds-=0.1; let mins=Math.floor(totalSeconds/60); let secs=Math.floor(totalSeconds%60); let deciDisplayVal=Math.floor((totalSeconds%1)*10); minTenSpan.textContent=Math.floor(mins/10); minOneSpan.textContent=mins%10; secTenSpan.textContent=Math.floor(secs/10); secOneSpan.textContent=secs%10; deciDisplay.textContent='.'+deciDisplayVal;}
+    },100);
+  }
+};
+updateTimerDisplay();
+
+// モード切替と矢印非表示
+function updateArrowVisibility(){ document.querySelectorAll('.arrowBtn').forEach(btn=>btn.style.display=(mode==="stopwatch")?'none':'flex'); }
+switchBtn.onclick=()=>{
+  if(mode==="stopwatch"){ mode="timer"; modeTitle.textContent="タイマー"; switchBtn.textContent="ストップウォッチに切り替え"; stopwatchControls.style.display="none"; timerControls.style.display="block"; }
+  else{ mode="stopwatch"; modeTitle.textContent="ストップウォッチ"; switchBtn.textContent="タイマーに切り替え"; stopwatchControls.style.display="block"; timerControls.style.display="none"; }
+  updateArrowVisibility();
+};
+updateArrowVisibility();
+</script>
+</body>
+</html>
